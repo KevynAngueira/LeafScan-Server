@@ -28,5 +28,5 @@ ENV PYTHONPATH="/app/LeafScan-Server:/app/LeafScan:$PYTHONPATH"
 EXPOSE 5000
 
 # Start the Flask server
-CMD ["python", "/app/LeafScan-Server/app.py"]
+CMD ["python", "/app/LeafScan-Server/LeafScanApp/App.py"]
 
