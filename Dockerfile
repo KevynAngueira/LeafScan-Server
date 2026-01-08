@@ -3,9 +3,11 @@ FROM python:3.11-slim
 WORKDIR /app
 
 # System dependencies
-RUN apt-get update && apt-get install -y \
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends \
     git ffmpeg libgl1 libglib2.0-0 \
  && rm -rf /var/lib/apt/lists/*
+
 
 # Clone repos
 RUN git clone --depth 1 --branch main https://github.com/KevynAngueira/LeafScan-Server.git /app/LeafScan-Server
