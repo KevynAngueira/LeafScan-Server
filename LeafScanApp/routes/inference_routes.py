@@ -1,4 +1,4 @@
-from flask import Blueprint, jsonify
+from flask import Blueprint, jsonify, current_app
 from core.cache import load_cache, CACHE_SCHEMA
 from core.inputs import routes_to_rerun
 from inference.defoliation_schedule_inference import schedule_defoliation_inference

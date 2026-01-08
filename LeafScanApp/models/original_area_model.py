@@ -1,14 +1,15 @@
 import joblib
 import pandas as pd
+from LeafScan.Models import load_model
 
 model_instance = None
 
-def init_model(model_path=None):
+def init_model(model_name=None):
     """Load and cache the trained model."""
-    if not model_path:
-        model_path = "/home/icicle/VSCode/LeafAnalysis/LeafScan/Models/leaf_model_gb.pkl"
+    if not model_name:
+        model_name = "leaf_model_gb.pkl"
     global model_instance
-    model_instance = joblib.load(model_path)
+    model_instance = load_model(model_name)
     print("✅ Model loaded successfully")
     return model_instance
 

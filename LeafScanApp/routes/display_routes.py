@@ -1,5 +1,5 @@
 import os, json
-from flask import Blueprint, request, jsonify
+from flask import Blueprint, request, jsonify, current_app
 from core.paths import IMAGE_DIR, VIDEO_DIR, PARAMS_DIR
 
 display_bp = Blueprint("display", __name__)
@@ -33,11 +33,11 @@ def display_videos():
 def list_image_files(directory):
     image_extensions = ('.jpg', '.jpeg', '.png', '.gif', '.bmp', '.tiff')
     image_files = [f for f in os.listdir(directory) if f.lower().endswith(image_extensions)]
-    app.logger.info(f'TEST: {image_files}')
+    current_app.logger.info(f'TEST: {image_files}')
     return image_files
 
 def list_video_files(directory):
     video_extensions = ('.mp4', '.avi', '.mov', '.mkv', '.flv', '.webm')
     video_files = [f for f in os.listdir(directory) if f.lower().endswith(video_extensions)]
-    app.logger.info(f'Video files: {video_files}')
+    current_app.logger.info(f'Video files: {video_files}')
     return video_files
