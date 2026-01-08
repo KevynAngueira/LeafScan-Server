@@ -1,5 +1,5 @@
 import os, json
-from flask import Blueprint, request, jsonify
+from flask import Blueprint, request, jsonify, current_app
 from core.cache import update_cache
 from core.paths import IMAGE_DIR, VIDEO_DIR, PARAMS_DIR
 

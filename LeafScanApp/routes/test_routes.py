@@ -1,5 +1,5 @@
 import os, json
-from flask import Blueprint, request, jsonify
+from flask import Blueprint, request, jsonify, current_app
 
 from core.cache import reset_cache
 
@@ -8,7 +8,7 @@ test_bp = Blueprint("test", __name__)
 @test_bp.route('/test')
 def test():
     response = {'status': 'success', 'message': 'Testing'}
-    app.logger.info(f'{response}')
+    current_app.logger.info(f'{response}')
     return jsonify(response)
 
 @test_bp.route('/reset')
