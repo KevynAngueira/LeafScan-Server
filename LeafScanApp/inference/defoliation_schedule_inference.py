@@ -1,10 +1,10 @@
 from core.scheduler import scheduler
 from .defoliation_inference import defoliation_inference
 
-def schedule_defoliation_inference(video_name, cache):
+def schedule_defoliation_inference(video_name, state=None):
     job = scheduler.add_job(
         func=defoliation_inference,
-        args=[video_name, cache],
+        args=[video_name, state],
         id=f"defoliation_{video_name}",
         replace_existing=False
     )

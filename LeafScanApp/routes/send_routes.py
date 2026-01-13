@@ -1,6 +1,5 @@
 import os, json
 from flask import Blueprint, request, jsonify, current_app
-from core.cache import update_cache
 from core.paths import IMAGE_DIR, VIDEO_DIR, PARAMS_DIR
 
 from inference.original_schedule_inference import schedule_original_inference
@@ -26,7 +25,7 @@ def send_video():
     video.save(video_path)
 
     base = os.path.splitext(video.filename)[0]
-    update_cache(base, "simulated_area", {"video": video.filename})
+    current_app.cache.update(base, "simulated_area", {"video": video.filename})
 
     job, queue_size = schedule_simulated_inference(base, None)
     print(job.id)
@@ -46,8 +45,8 @@ def send_params():
         json.dump(params, f, indent=2)
 
     base = os.path.splitext(filename)[0]
-    update_cache(base, "simulated_area", params)
-    update_cache(base, "original_area", params)
+    current_app.cache.update(base, "simulated_area", params)
+    current_app.cache.update(base, "original_area", params)
 
     job, queue_size = schedule_original_inference(base, None)
     print(job.id)

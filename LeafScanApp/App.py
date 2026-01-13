@@ -2,11 +2,13 @@ from flask import Flask
 from flask_cors import CORS
 from core.paths import ensure_dirs
 from routes import register_routes
+from core import cache
 
 def create_app():
     app = Flask(__name__, static_folder="static")
     CORS(app)
     ensure_dirs()
+    app.cache = cache.get_cache()
     register_routes(app)
     return app
 

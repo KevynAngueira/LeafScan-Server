@@ -1,8 +1,8 @@
-import json, os
-import shutil
+import json
 from datetime import datetime
+from typing import Dict
+from storage import ComputeCache, FileSystemComputeCache
 
-CACHE_DIR = "cache"
 CACHE_SCHEMA = {
     "original_area": {
         "params": ["leafNumber", "leafWidths"],
@@ -18,65 +18,84 @@ CACHE_SCHEMA = {
     }
 }
 
-def reset_cache():
-    shutil.rmtree(CACHE_DIR)
-    os.makedirs(CACHE_DIR, exist_ok=True)
 
-def get_cache_dir(video_name: str):
-    path = os.path.join(CACHE_DIR, video_name)
-    os.makedirs(path, exist_ok=True)
-    return path
+_cache = None
 
-def load_cache(video_name: str, step: str):
-    path = os.path.join(get_cache_dir(video_name), f"{step}.json")
-    if not os.path.exists(path):
-        return {"status": "waiting", "params": {}, "results": {}}
-    with open(path, "r") as f:
-        return json.load(f)
+def get_cache():
+    global _cache
+    if _cache is None:
+        _cache = CacheService(FileSystemComputeCache("/tmp/leafscan/cache"))
+    return _cache
 
-def save_cache(video_name: str, step: str, cache: dict):
-    cache["last_updated"] = datetime.utcnow().isoformat() + "Z"
-    path = os.path.join(get_cache_dir(video_name), f"{step}.json")
-    with open(path, "w") as f:
-        json.dump(cache, f, indent=2)
-
-def sanitize_cache(cache_type: str, cache: dict):
-    schema = CACHE_SCHEMA.get(cache_type)
-    if not schema:
-        raise ValueError(f"Unknown cache type: {cache_type}")
-
-    params = {k: cache.get("params", {}).get(k) for k in schema["params"]}
-    results = {k: cache.get("results", {}).get(k) for k in schema["results"]}
-
-    cache["params"] = params
-    cache["results"] = results
-    return cache
-
-def update_cache(video_name: str, step: str, new_params: dict = None):
+class CacheService:
     """
-    Loads a cache, updates params if provided, and sets status accordingly.
-    Returns the updated cache dictionary.
+    Cache logic + schema enforcement.
+    Storage backend is injected.
     """
-    cache = load_cache(video_name, step)
-    cache = sanitize_cache(step, cache)
 
-    schema_params = CACHE_SCHEMA[step]['params']
-    current_params = cache.get('params', {})
+    def __init__(self, backend: ComputeCache):
+        self.backend = backend
 
-    new_filtered_params = {k: new_params[k] for k in schema_params if k in (new_params or {})}
-    new_updated_params = {k: v for k, v in new_filtered_params.items() if current_params.get(k) != v}
+    def _key(self, video_name: str, step: str) -> str:
+        return f"{video_name}:{step}"
 
-    if new_updated_params:
-        cache['params'].update(new_updated_params)
-        cache['results'] = {}
+    def reset(self):
+        self.backend.clear()
 
-        all_params_present = all(cache['params'].get(k) is not None for k in schema_params)
+    def load(self, video_name: str, step: str) -> Dict:
+        key = self._key(video_name, step)
+        if not self.backend.exists(key):
+            return {"status": "waiting", "params": {}, "results": {}}
 
-        if not all_params_present:
-            cache['status'] = 'waiting'
-        else:
-            cache['status'] = 'ready'
+        raw = self.backend.get(key)
+        return json.loads(raw.decode("utf-8"))
 
-        save_cache(video_name, step, cache)
+    def save(self, video_name: str, step: str, cache: Dict):
+        cache["last_updated"] = datetime.utcnow().isoformat() + "Z"
+        key = self._key(video_name, step)
+        self.backend.put(
+            key,
+            json.dumps(cache, indent=2).encode("utf-8")
+        )
 
-    return cache
+    def sanitize(self, step: str, cache: Dict) -> Dict:
+        schema = CACHE_SCHEMA.get(step)
+        if not schema:
+            raise ValueError(f"Unknown cache type: {step}")
+
+        cache["params"] = {
+            k: cache.get("params", {}).get(k)
+            for k in schema["params"]
+        }
+        cache["results"] = {
+            k: cache.get("results", {}).get(k)
+            for k in schema["results"]
+        }
+        return cache
+
+    def update(self, video_name: str, step: str, new_params: Dict = None) -> Dict:
+        cache = self.load(video_name, step)
+        cache = self.sanitize(step, cache)
+
+        schema_params = CACHE_SCHEMA[step]["params"]
+        current_params = cache.get("params", {})
+
+        new_params = new_params or {}
+        updated = {
+            k: new_params[k]
+            for k in schema_params
+            if k in new_params and current_params.get(k) != new_params[k]
+        }
+
+        if updated:
+            cache["params"].update(updated)
+            cache["results"] = {}
+
+            if all(cache["params"].get(k) is not None for k in schema_params):
+                cache["status"] = "ready"
+            else:
+                cache["status"] = "waiting"
+
+            self.save(video_name, step, cache)
+
+        return cache

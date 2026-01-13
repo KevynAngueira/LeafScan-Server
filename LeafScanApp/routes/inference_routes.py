@@ -1,5 +1,5 @@
 from flask import Blueprint, jsonify, current_app
-from core.cache import load_cache, CACHE_SCHEMA
+from core.cache import CACHE_SCHEMA
 from core.inputs import routes_to_rerun
 from inference.defoliation_schedule_inference import schedule_defoliation_inference
 from inference.original_schedule_inference import schedule_original_inference
@@ -14,8 +14,8 @@ SCHEDULERS = {
 }
 
 def check_dependencies(video_name, stage, missing_params):
-    cache = load_cache(video_name, stage)
-    current_params = cache['params']
+    state = current_app.cache.load(video_name, stage)
+    current_params = state['params']
 
     schema = CACHE_SCHEMA.get(stage, {})
     required_params = schema.get('params', [])
@@ -47,19 +47,19 @@ def inference_entry(video_name):
     - Reports missing first-level data dependencies for uploads.
     """
     #try:
-    cache = load_cache(video_name, "defoliation")
+    state = current_app.cache.load(video_name, "defoliation")
 
     # 1️⃣ Return completed result immediately
-    if cache and cache.get("status") == "completed":
+    if state and state.get("status") == "completed":
         return jsonify({
             "status": "completed",
             "message": "✅ Defoliation result ready",
-            "results": cache["results"],
+            "results": state["results"],
         })
 
     # 2️⃣ If ready (parameters known, no result yet)
-    if cache and cache.get("status") == "ready":
-        job, queue_size = schedule_defoliation_inference(video_name, cache)
+    if state and state.get("status") == "ready":
+        job, queue_size = schedule_defoliation_inference(video_name, state)
         return jsonify({
             "status": "queued",
             "message": f"📅 Defoliation job re-scheduled for {video_name}",
@@ -79,7 +79,7 @@ def inference_entry(video_name):
             "reupload": routes
         })
     else:
-        job, queue_size = schedule_defoliation_inference(video_name, cache)
+        job, queue_size = schedule_defoliation_inference(video_name, state)
         return jsonify({
             "status": "queued",
             "message": f"📅 Defoliation job re-scheduled for {video_name}",
