@@ -24,7 +24,7 @@ _cache = None
 def get_cache():
     global _cache
     if _cache is None:
-        backend = FileSystemComputeCache("/tmp/leafscan/cache")
+        backend = FileSystemComputeCache("/software/leafscan/cache")
         _cache = CacheService(backend)
     return _cache
 
