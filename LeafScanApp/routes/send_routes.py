@@ -41,9 +41,6 @@ def send_params():
     if not filename or not params:
         return jsonify({"status": "error", "message": "Missing filename or params"}), 400
 
-    with open(PARAMS_DIR / (os.path.splitext(filename)[0] + ".json"), "w") as f:
-        json.dump(params, f, indent=2)
-
     base = os.path.splitext(filename)[0]
     current_app.cache.update(base, "simulated_area", params)
     current_app.cache.update(base, "original_area", params)

@@ -42,7 +42,7 @@ def run_leafscan(video_name, video_path, output_path, length):
     pred_simulated_area = leafscan_instance.scanVideo(
         remaining_leaf_length=length,
         video_path=str(video_path),
-        output_path=str(output_path)
+        #output_path=str(output_path)
     )
 
     stitch_images_vertically(SLICES_DIR, stacked_slices_path)

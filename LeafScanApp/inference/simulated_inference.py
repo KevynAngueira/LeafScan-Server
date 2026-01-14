@@ -1,5 +1,6 @@
 import os
 import shutil
+import tempfile
 from core.cache import get_cache
 from core.paths import VIDEO_DIR, OUT_DIR, SLICES_DIR
 from models.leafscan_model import run_leafscan
@@ -23,9 +24,17 @@ def simulated_inference(video_name, state=None):
             params = state["params"]
             length = float(params["length"])
 
-            video_path = os.path.join(VIDEO_DIR, f"{video_name}.mp4")
-            video_output_path = OUT_DIR / video_name
-            pred_simulated_area = run_leafscan(video_name, video_path, video_output_path, length)
+            with cache.load_video_stream(video_name) as stream:
+                with tempfile.NamedTemporaryFile(suffix=".mp4", delete=False) as tmp:
+                    shutil.copyfileobj(stream, tmp)
+                    tmp_path = tmp.name
+            try:
+                video_output_path = OUT_DIR / video_name
+                pred_simulated_area = run_leafscan(video_name, tmp_path, video_output_path, length)
+            finally:
+                # Ensure temp file is cleaned up even if run_leafscan fails
+                if os.path.exists(tmp_path):
+                    os.remove(tmp_path)
 
             state["results"]["simulated_area"] = pred_simulated_area
             state["status"] = "completed"
