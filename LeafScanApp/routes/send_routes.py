@@ -20,15 +20,15 @@ def send_image():
 def send_video():
     if "video" not in request.files:
         return jsonify({"status": "error", "message": "No video file"}), 400
+    
     video = request.files["video"]
-    video_path = VIDEO_DIR / video.filename
-    video.save(video_path)
-
     base = os.path.splitext(video.filename)[0]
+
+    current_app.cache.save_video_stream(base, video)    
     current_app.cache.update(base, "simulated_area", {"video": video.filename})
 
     job, queue_size = schedule_simulated_inference(base, None)
-    print(job.id)
+    print(f"Queued Job -> {job.id}")
 
     return jsonify({"status": "success", "filename": video.filename})
 

@@ -4,11 +4,12 @@ from .defoliation_schedule_inference import schedule_defoliation_inference
 
 def original_inference(video_name, state=None):
     """Runs ML model to infer original area and update cache."""
+    
+    cache = get_cache()
+    if not state:
+        state = cache.load(video_name, 'original_area')
+    
     try:
-        if not state:
-            cache = get_cache()
-            state = cache.load(video_name, 'original_area')
-
         if state["status"] == "waiting":
             print(f"Warning: Missing parameters, skipping inference")
             return     

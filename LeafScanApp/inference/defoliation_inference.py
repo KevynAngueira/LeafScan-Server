@@ -2,11 +2,12 @@ from core.cache import get_cache
 
 def defoliation_inference(video_name, state=None):
     """Calculates defoliation % based on original and simulated areas."""
+    
+    cache = get_cache()
+    if not state:
+        state = cache.load(video_name, 'defoliation')
+    
     try:
-        if not state:
-            cache = get_cache()
-            state = cache.load(video_name, 'defoliation')
-
         if state["status"] == "waiting":
             print(f"Warning: Missing parameters, skipping inference")
             return 
