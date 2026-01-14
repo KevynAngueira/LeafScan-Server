@@ -7,7 +7,7 @@ from core import cache
 def create_app():
     app = Flask(__name__, static_folder="static")
     CORS(app)
-    ensure_dirs()
+    # ensure_dirs()
     app.cache = cache.get_cache()
     register_routes(app)
     return app
