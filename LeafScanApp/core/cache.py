@@ -1,8 +1,10 @@
 import time
 import json
+import requests
 from datetime import datetime
 from typing import Dict
 from storage import ComputeCache, FileSystemComputeCache
+from storage.upload_tasks import schedule_upload
 
 CACHE_SCHEMA = {
     "original_area": {
@@ -24,7 +26,7 @@ _cache = None
 def get_cache():
     global _cache
     if _cache is None:
-        backend = FileSystemComputeCache("/software/leafscan/cache")
+        backend = FileSystemComputeCache("/tmp/leafscan/cache")
         _cache = CacheService(backend)
     return _cache
 
@@ -58,6 +60,10 @@ class CacheService:
         artifact = self._artifact_name(entry_id, step)
         self.backend.put(artifact, json.dumps(cache, indent=2).encode("utf-8"), entry_id=entry_id)
         self.meta.update_entry(entry_id)
+        
+        if cache.get("status") == "completed":
+            local_path = self.backend._artifact_path(entry_id, artifact)
+            schedule_upload(artifact, local_path)
 
     def sanitize(self, step: str, cache: Dict) -> Dict:
         schema = CACHE_SCHEMA.get(step)
@@ -113,6 +119,9 @@ class CacheService:
         artifact = f"{entry_id}.mp4"
         self.backend.put_stream(artifact, file_storage.stream, entry_id=entry_id)
         self.meta.update_entry(entry_id)
+
+        local_path = self.backend._artifact_path(entry_id, artifact)
+        schedule_upload(artifact, local_path)
 
 
 class CacheMetaStore:

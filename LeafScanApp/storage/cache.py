@@ -12,6 +12,10 @@ class ComputeCache(ABC):
         pass
 
     @abstractmethod
+    def put_chunk(self, artifact_name: str, chunk: bytes, entry_id: str | None = None):
+        pass
+
+    @abstractmethod
     def get(self, artifact_name: str, entry_id: str | None = None) -> bytes:
         pass
 

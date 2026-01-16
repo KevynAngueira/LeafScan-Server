@@ -17,6 +17,10 @@ class FileSystemComputeCache(ComputeCache):
     def _artifact_path(self, entry_id: str | None, artifact_name: str) -> Path:
         return self._entry_dir(entry_id) / artifact_name
 
+    # =======================================
+    #            PUT FUNCTIONS
+    # =======================================
+
     def put(self, artifact_name: str, data: bytes, entry_id: str | None = None) -> None:
         entry_dir = self._entry_dir(entry_id)
         entry_dir.mkdir(parents=True, exist_ok=True)
@@ -35,6 +39,16 @@ class FileSystemComputeCache(ComputeCache):
         with open(self._artifact_path(entry_id, artifact_name), "wb") as f:
             shutil.copyfileobj(stream, f)
 
+    def put_chunk(self, artifact_name: str, chunk: bytes, entry_id: str | None = None):
+        path = self._artifact_path(entry_id, artifact_name)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        with open(path, "ab") as f:
+            f.write(chunk)
+
+    # =======================================
+    #            GET FUNCTIONS
+    # =======================================
+
     def get(self, artifact_name: str, entry_id: str | None = None) -> bytes:
         return self._artifact_path(entry_id, artifact_name).read_bytes()
 
@@ -44,6 +58,11 @@ class FileSystemComputeCache(ComputeCache):
 
     def get_stream(self, artifact_name: str, entry_id: str | None = None):
         return open(self._artifact_path(entry_id, artifact_name), "rb")
+
+    
+    # =======================================
+    #            HELPER FUNCTIONS
+    # =======================================
 
     def exists(self, artifact_name: str, entry_id: str | None = None) -> bool:
         return self._artifact_path(entry_id, artifact_name).exists()

@@ -28,7 +28,6 @@ def send_video():
     current_app.cache.update(base, "simulated_area", {"video": video.filename})
 
     job, queue_size = schedule_simulated_inference(base, None)
-    print(f"Queued Job -> {job.id}")
 
     return jsonify({"status": "success", "filename": video.filename})
 

@@ -29,8 +29,8 @@ def original_inference(video_name, state=None):
             cache.update(video_name, "defoliation", {"original_area": pred_original_area})
         
         print(f"✅ Original area: {pred_original_area:.2f}")
-        job, queue_size = schedule_defoliation_inference(video_name, None)
-        print(job.id)
+        inf_job, inf_queue_size = schedule_defoliation_inference(video_name, None)
+        print(inf_job.id)
 
         return pred_original_area
 
