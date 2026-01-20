@@ -3,7 +3,8 @@ import json
 import requests
 from datetime import datetime
 from typing import Dict
-from storage import ComputeCache, FileSystemComputeCache, get_cache_meta_store, schedule_upload
+from storage import ComputeCache, FileSystemComputeCache
+from storage.upload_tasks import schedule_upload
 from config.storage import CACHE_LOCATION
 
 CACHE_SCHEMA = {
@@ -36,9 +37,9 @@ class CacheService:
     Storage backend is injected.
     """
 
-    def __init__(self, backend: ComputeCache):
+    def __init__(self, backend: ComputeCache, max_bytes: int = 1e10):
         self.backend = backend
-        self.meta = get_cache_meta_store()
+        self.meta = CacheMetaStore(backend, max_bytes)
 
     def _artifact_name(self, entry_id: str, step: str) -> str:
         return f"{entry_id}_{step}.json"
@@ -123,7 +124,7 @@ class CacheService:
         local_path = self.backend._artifact_path(entry_id, artifact)
         schedule_upload(artifact, local_path)
 
-'''
+
 class CacheMetaStore:
     """
     Maintains cache metadata and enforces max_bytes limit.
@@ -191,4 +192,3 @@ class CacheMetaStore:
 
     def get_meta(self):
         return self.meta
-'''

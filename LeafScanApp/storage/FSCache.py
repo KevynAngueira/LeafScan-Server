@@ -2,7 +2,7 @@ from pathlib import Path
 import shutil
 import uuid
 import json
-from .cache import ComputeCache
+from .Cache import ComputeCache
 
 class FileSystemComputeCache(ComputeCache):
     def __init__(self, base_dir: str):

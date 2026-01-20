@@ -3,11 +3,12 @@ import hashlib
 import time
 from pathlib import Path
 from core.scheduler import upload_scheduler
+from config.storage import DATA_STORE_URL
 
 def schedule_upload(artifact: str, local_path: Path):
     job = upload_scheduler.add_job(
         func=upload_with_retry,
-        args=[artifact, local_path, "http://149.165.151.21:8000"],
+        args=[artifact, local_path, DATA_STORE_URL],
         id=f"upload_{artifact}",
         replace_existing=False
     )
