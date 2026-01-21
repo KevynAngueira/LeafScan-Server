@@ -6,6 +6,7 @@ import os
 from .Cache import ComputeCache
 from .FSCache import FileSystemComputeCache
 from config.storage import CACHE_LOCATION, CACHE_MAX_BYTES
+from config.job_schema import JOB_SCHEMA
 
 _redis = None
 _cache_meta_store = None
@@ -41,22 +42,15 @@ class CacheMetaStore:
 
     def init_entry(self, entry_id: str):
         key = f"job:{entry_id}"
-        if not self.r.exists(key):
-            now = time.time()
-            pipe = self.r.pipeline()
-            pipe.hset(key, mapping={
-                "state": "RECEIVING",
-                "video_upload_done": 0,
-                "original_area_upload_done": 0,
-                "simulated_area_upload_done": 0,
-                "defoliation_upload_done": 0,
-                "results_fetched": 0,
-                "created_at": now,
-                "last_updated": now
-            })
-            pipe.zadd("cache:lru", {entry_id: now})
-            pipe.zadd("cache:bytes", {entry_id: 0})
-            pipe.execute()
+        if self.r.exists(key):
+            return
+
+        now = time.time()
+        pipe = self.r.pipeline()
+        pipe.hset(key, mapping= JOB_SCHEMA)
+        pipe.zadd("cache:lru", {entry_id: now})
+        pipe.zadd("cache:bytes", {entry_id: 0})
+        pipe.execute()
 
     def ensure_exists(self, entry_id):
         key = f"job:{entry_id}"
@@ -70,30 +64,15 @@ class CacheMetaStore:
     def touch(self, entry_id: str):
         """Update last_updated timestamp and LRU score."""
         self.ensure_exists(entry_id)
+        key = f"job:{entry_id}"
         
         now = time.time()
-        key = f"job:{entry_id}"
         pipe = self.r.pipeline()
         pipe.hset(key, mapping={
             "last_updated": now
         })
         pipe.zadd("cache:lru", {entry_id: now})
         pipe.execute()
-
-
-    def update_state(self, entry_id: str, new_state: str):
-        """Update job state and touch the entry."""
-        self.ensure_exists(entry_id)
-        key = f"job:{entry_id}"
-
-        pipe = self.r.pipeline()
-        pipe.hset(key, mapping={
-            "state": new_state
-        })
-        pipe.execute()
-
-        self.touch(entry_id)
-
 
     def update_entry(self, entry_id: str):
         """Recompute job size from backend, update total bytes, and touch entry."""
@@ -117,33 +96,54 @@ class CacheMetaStore:
         return int(self.r.get("cache:total_bytes") or 0)
 
     # ----------------------------
+    # Input flags
+    # ----------------------------
+
+    def update_flag(self, entry_id, flag, value=1):
+        self.ensure_exists(entry_id)
+        self.r.hset(f"job:{entry_id}", flag, value)
+        self.touch(entry_id)
+
+    def mark_video_received(self, entry_id):
+        self.ensure_exists(entry_id)
+        self.r.hset(f"job:{entry_id}", "in_video", 1)
+        self.touch(entry_id)
+
+    def mark_original_params_received(self, entry_id):
+        self.ensure_exists(entry_id)
+        self.r.hset(f"job:{entry_id}", "in_original", 1)
+        self.touch(entry_id)
+
+    def mark_simulated_params_received(self, entry_id):
+        self.ensure_exists(entry_id)
+        self.r.hset(f"job:{entry_id}", "in_simulated", 1)
+        self.touch(entry_id)
+
+    # ----------------------------
+    # Inference flags
+    # ----------------------------
+
+    def set_stage(self, entry_id, stage):
+        self.ensure_exists(entry_id)
+        self.r.hset(f"job:{entry_id}", "stage", stage)
+        self.touch(entry_id)
+
+    def set_defoliation_result(self, entry_id, value):
+        self.ensure_exists(entry_id)
+        self.r.hset(f"job:{entry_id}", mapping={
+            "defoliation_result": value,
+            "stage": "COMPLETE"
+        })
+        self.touch(entry_id)
+
+    # ----------------------------
     # Upload flags
     # ----------------------------
 
-    def mark_video_uploaded(self, entry_id: str):
-        self.ensure_exists(entry_id)
-        self.r.hset(f"job:{entry_id}", "video_upload_done", 1)
-        self.touch(entry_id)
-    
-    def mark_original_area_uploaded(self, entry_id: str):
-        self.ensure_exists(entry_id)
-        self.r.hset(f"job:{entry_id}", "original_area_upload_done", 1)
-        self.touch(entry_id)
-    
-    def mark_simulated_area_uploaded(self, entry_id: str):
-        self.ensure_exists(entry_id)
-        self.r.hset(f"job:{entry_id}", "simulated_area_upload_done", 1)
-        self.touch(entry_id)
-    
-    def mark_defoliation_uploaded(self, entry_id: str):
-        self.ensure_exists(entry_id)
-        self.r.hset(f"job:{entry_id}", "defoliation_upload_done", 1)
-        self.touch(entry_id)
+    def mark_uploaded(self, id, artifact):
+        self.r.hset(f"job:{id}", f"up_{artifact}", 1)
+        self.touch(id)
 
-    def mark_results_fetched(self, entry_id: str):
-        self.ensure_exists(entry_id)
-        self.r.hset(f"job:{entry_id}", "results_fetched", 1)
-        self.touch(entry_id)
 
     # ----------------------------
     # Eviction
