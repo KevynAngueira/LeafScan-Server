@@ -46,7 +46,7 @@ def simulated_inference(video_name, state=None):
             cache.update(video_name, "defoliation", {"simulated_area": pred_simulated_area})
             
             meta = get_meta_store()
-            meta.update_flag(video_name, ARTIFACTS["simulated"].output_flag)
+            meta.update_field(video_name, ARTIFACTS["simulated"].output_flag)
         
         print(f"✅ Simulated area: {pred_simulated_area:.2f}")
         job, queue_size = schedule_defoliation_inference(video_name, None)

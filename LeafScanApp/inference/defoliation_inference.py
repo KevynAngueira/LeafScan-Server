@@ -28,8 +28,8 @@ def defoliation_inference(video_name, state=None):
             cache.save(video_name, "defoliation", state)
 
             meta = get_meta_store()
-            meta.update_flag(video_name, ARTIFACTS["defoliation"].output_flag)
-            meta.update_flag(video_name, JobFields.RESULT_DEFOLIATION, pred_defoliation)
+            meta.update_field(video_name, ARTIFACTS["defoliation"].output_flag)
+            meta.update_field(video_name, JobFields.RESULT_DEFOLIATION, pred_defoliation)
 
         print(f"✅ Defoliation: {pred_defoliation:.2f}%")
         return pred_defoliation

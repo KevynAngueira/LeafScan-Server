@@ -38,7 +38,7 @@ class CacheMetaStore:
         self.r.setnx("cache:total_bytes", 0)
 
     # ----------------------------
-    # Job creation
+    # Job Management
     # ----------------------------
 
     def init_entry(self, entry_id: str):
@@ -62,6 +62,11 @@ class CacheMetaStore:
         if not self.r.exists(key):
             self.init_entry(entry_id) 
 
+    def get_field(self, entry_id: str, field: str):
+        self.ensure_exists(entry_id)
+        val = self.r.hget(f"job:{entry_id}", field)
+        return val
+
     # ----------------------------
     # Update Tracking
     # ----------------------------
@@ -79,12 +84,12 @@ class CacheMetaStore:
         pipe.zadd("cache:lru", {entry_id: now})
         pipe.execute()
 
-    def update_flag(self, entry_id: str, flag: str, val=1):
-        if flag not in JOB_SCHEMA:
-            raise ValueError(f"Unknown job flag: {flag}")
+    def update_field(self, entry_id: str, field: str, val=1):
+        if field not in JOB_SCHEMA:
+            raise ValueError(f"Unknown job field: {field}")
 
         self.ensure_exists(entry_id)
-        self.r.hset(f"job:{entry_id}", flag, val)
+        self.r.hset(f"job:{entry_id}", field, val)
         self.touch(entry_id)
 
     def update_bytes(self, entry_id: str):

@@ -1,3 +1,19 @@
+from storage import JobFields
+
+ROUTES = ['video', 'params']
+
+PARAMS_TO_ROUTES = {
+    JobFields.IN_VIDEO: "video",
+    JobFields.IN_PARAMS: "params"
+}
+
+def routes_to_rerun(missing_params):
+    # Determine which routes are required based on missing params
+    rerun_routes = set(PARAMS_TO_ROUTES[p] for p in missing_params if p in PARAMS_TO_ROUTES)
+    # Build final dictionary with True/False
+    return {route: (route in rerun_routes) for route in ROUTES}
+
+'''
 ROUTES = ['video', 'params']
 
 ROUTES_TO_PARAMS = {
@@ -22,3 +38,4 @@ def routes_to_rerun(missing_params):
 
     # Build final dictionary with True/False
     return {route: (route in rerun_routes) for route in ROUTES}
+'''

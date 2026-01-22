@@ -1,18 +1,15 @@
 from flask import Blueprint, jsonify, current_app
 from core.cache import CACHE_SCHEMA
 from core.inputs import routes_to_rerun
+from core.dependencies import check_dependencies
 from inference.defoliation_schedule_inference import schedule_defoliation_inference
 from inference.original_schedule_inference import schedule_original_inference
 from inference.simulated_schedule_inference import schedule_simulated_inference
+from storage import get_meta_store, JobFields
 
 inference_bp = Blueprint("inference", __name__)
 
-SCHEDULERS = {
-    "original_area": schedule_original_inference,
-    "simulated_area": schedule_simulated_inference,
-    "defoliation": schedule_defoliation_inference
-}
-
+'''
 def check_dependencies(video_name, stage, missing_params):
     state = current_app.cache.load(video_name, stage)
     current_params = state['params']
@@ -36,6 +33,7 @@ def check_dependencies(video_name, stage, missing_params):
             no_missing = no_missing and sub_no_missing
 
     return no_missing
+'''
 
 @inference_bp.route("/inference/<video_name>")
 def inference_entry(video_name):
@@ -47,48 +45,37 @@ def inference_entry(video_name):
     - Reports missing first-level data dependencies for uploads.
     """
     #try:
-    state = current_app.cache.load(video_name, "defoliation")
-
+    meta = get_meta_store()
+    result = meta.get_field(video_name, JobFields.RESULT_DEFOLIATION)
+    try: 
+        defoliation = float(result)
+    except:
+        defoliation = -1.0
+    
     # 1️⃣ Return completed result immediately
-    if state and state.get("status") == "completed":
+    if defoliation != -1:
         return jsonify({
             "status": "completed",
             "message": "✅ Defoliation result ready",
-            "results": state["results"],
+            "results": {"defoliation": defoliation},
         })
 
-    # 2️⃣ If ready (parameters known, no result yet)
-    if state and state.get("status") == "ready":
-        job, queue_size = schedule_defoliation_inference(video_name, state)
+    # 2️⃣ Otherwise, check for missing dependencies
+    missing_params = []
+    all_satisfied = check_dependencies(video_name, JobFields.OUT_DEFOLIATION, missing_params)
+
+    if all_satisfied:
+        job, queue_size = schedule_defoliation_inference(video_name)
         return jsonify({
             "status": "queued",
             "message": f"📅 Defoliation job re-scheduled for {video_name}",
             "jobs_ahead": queue_size,
             "job_id": job.id,
         })
-
-    # 3️⃣ Otherwise, check dependencies
-    missing_params = []
-    no_missing = check_dependencies(video_name, 'defoliation', missing_params)
-    
-    if not no_missing:
+    else:
         routes = routes_to_rerun(missing_params)
         return jsonify({
             "status": "waiting",
             "message": "⚙️ Waiting for dependencies",
             "reupload": routes
         })
-    else:
-        job, queue_size = schedule_defoliation_inference(video_name, state)
-        return jsonify({
-            "status": "queued",
-            "message": f"📅 Defoliation job re-scheduled for {video_name}",
-            "jobs_ahead": queue_size,
-            "job_id": job.id,
-        })
-
-    #except Exception as e:
-    #    return jsonify({
-    #        "status": "error",
-    #        "message": f"Inference dispatch failed: {e}",
-    #    }), 500

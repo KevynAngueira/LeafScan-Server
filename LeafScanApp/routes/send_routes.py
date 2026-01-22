@@ -29,7 +29,7 @@ def send_video():
     current_app.cache.update(base, "simulated_area", {"video": video.filename})
 
     meta = get_meta_store()
-    meta.update_flag(base, ARTIFACTS["video"].input_flag)
+    meta.update_field(base, ARTIFACTS["video"].input_flag)
 
     job, queue_size = schedule_simulated_inference(base, None)
 
@@ -49,7 +49,7 @@ def send_params():
     current_app.cache.update(base, "original_area", params)
 
     meta = get_meta_store()
-    meta.update_flag(base, ARTIFACTS["params"].input_flag)
+    meta.update_field(base, ARTIFACTS["params"].input_flag)
 
     job, queue_size = schedule_original_inference(base, None)
     job, queue_size = schedule_simulated_inference(base, None)

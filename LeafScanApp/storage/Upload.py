@@ -26,7 +26,7 @@ def upload_with_mark(entry_id: str, artifact: str, local_path: Path, data_node_u
     if upload_successful:
         meta = get_meta_store()
         artifact_obj = artifact_from_filename(artifact)
-        meta.update_flag(entry_id, artifact_obj.upload_flag)
+        meta.update_field(entry_id, artifact_obj.upload_flag)
         return True
     return False
 
