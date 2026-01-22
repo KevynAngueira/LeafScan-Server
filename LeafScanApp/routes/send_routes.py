@@ -1,6 +1,7 @@
 import os, json
 from flask import Blueprint, request, jsonify, current_app
 from core.paths import IMAGE_DIR, VIDEO_DIR, PARAMS_DIR
+from core.cache import get_cache
 
 from inference.original_schedule_inference import schedule_original_inference
 from inference.simulated_schedule_inference import schedule_simulated_inference
@@ -47,6 +48,9 @@ def send_params():
     base = os.path.splitext(filename)[0]
     current_app.cache.update(base, "simulated_area", params)
     current_app.cache.update(base, "original_area", params)
+
+    cache = get_cache()
+    cache.reset_entry(base)
 
     meta = get_meta_store()
     meta.update_field(base, ARTIFACTS["params"].input_flag)

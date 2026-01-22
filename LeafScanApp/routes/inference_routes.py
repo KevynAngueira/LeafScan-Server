@@ -9,32 +9,6 @@ from storage import get_meta_store, JobFields
 
 inference_bp = Blueprint("inference", __name__)
 
-'''
-def check_dependencies(video_name, stage, missing_params):
-    state = current_app.cache.load(video_name, stage)
-    current_params = state['params']
-
-    schema = CACHE_SCHEMA.get(stage, {})
-    required_params = schema.get('params', [])
-
-    no_missing = True
-    for r in required_params: 
-        if not current_params.get(r):
-            if CACHE_SCHEMA.get(r, {}):
-                sub_no_missing = check_dependencies(video_name, r, missing_params)
-                
-                if sub_no_missing:
-                    job, queue_size = SCHEDULERS[r](video_name, None)
-
-            else:
-                missing_params.append(r)
-                sub_no_missing = False
-
-            no_missing = no_missing and sub_no_missing
-
-    return no_missing
-'''
-
 @inference_bp.route("/inference/<video_name>")
 def inference_entry(video_name):
     """
@@ -54,6 +28,7 @@ def inference_entry(video_name):
     
     # 1️⃣ Return completed result immediately
     if defoliation != -1:
+        meta.mark_results_fetched(video_name)
         return jsonify({
             "status": "completed",
             "message": "✅ Defoliation result ready",

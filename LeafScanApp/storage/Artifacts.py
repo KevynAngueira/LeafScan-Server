@@ -33,13 +33,13 @@ ARTIFACTS = {
         input_flag=JobFields.IN_PARAMS,
     ),
 
-    "original": Artifact(
+    "original_area": Artifact(
         pattern="*_original_area.json",
         output_flag=JobFields.OUT_ORIGINAL,
         upload_flag=JobFields.UP_ORIGINAL,
     ),
 
-    "simulated": Artifact(
+    "simulated_area": Artifact(
         pattern="*_simulated_area.json",
         output_flag=JobFields.OUT_SIMULATED,
         upload_flag=JobFields.UP_SIMULATED,

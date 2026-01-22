@@ -50,6 +50,15 @@ class CacheService:
         self.meta.reset()
         self.backend.clear()
 
+    def reset_entry(self, entry_id: str):
+        for c in ["defoliation", "original_area", "simulated_area"]:
+            state = self.load(entry_id, c)
+            state["status"] = "ready"
+            state["results"] = {}
+            self.save(entry_id, c, state)
+
+        self.meta.reset_job(entry_id)
+
     def load(self, entry_id: str, step: str) -> Dict:
         artifact = self._artifact_name(entry_id, step)
 
@@ -64,10 +73,12 @@ class CacheService:
         artifact = self._artifact_name(entry_id, step)
         self.backend.put(artifact, json.dumps(cache, indent=2).encode("utf-8"), entry_id=entry_id)
         self.meta.update_bytes(entry_id)
-        
+    
         if cache.get("status") == "completed":
             local_path = self.backend._artifact_path(entry_id, artifact)
             schedule_upload(entry_id, artifact, local_path)
+
+        self.meta.evict_expired_jobs_for_space()
 
     def sanitize(self, step: str, cache: Dict) -> Dict:
         schema = CACHE_SCHEMA.get(step)
@@ -126,3 +137,5 @@ class CacheService:
 
         local_path = self.backend._artifact_path(entry_id, artifact)
         schedule_upload(entry_id, artifact, local_path)
+
+        self.meta.evict_expired_jobs_for_space()

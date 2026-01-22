@@ -14,6 +14,7 @@ class JobFields:
     UP_DEFOLIATION = "up_defoliation"
 
     RESULT_DEFOLIATION = "defoliation_result"
+    RESULT_FETCHED = "result_fetched"
 
     BYTES = "bytes"
     CREATED_AT = "created_at"
@@ -39,6 +40,7 @@ JOB_SCHEMA = {
 
     # result
     JobFields.RESULT_DEFOLIATION: -1,
+    JobFields.RESULT_FETCHED: 0,
 
     # bookkeeping
     JobFields.BYTES: 0,

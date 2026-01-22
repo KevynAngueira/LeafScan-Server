@@ -3,11 +3,14 @@
 import time
 import redis
 import os
+import copy
+
+from config.storage import CACHE_LOCATION, CACHE_MAX_BYTES
 
 from .Cache import ComputeCache
 from .FSCache import FileSystemComputeCache
-from .JobSchema import JOB_SCHEMA
-from config.storage import CACHE_LOCATION, CACHE_MAX_BYTES
+from .JobSchema import JOB_SCHEMA, JobFields
+
 
 _redis = None
 _cache_meta_store = None
@@ -47,7 +50,7 @@ class CacheMetaStore:
             return
 
         now = time.time()
-        schema = JOB_SCHEMA.copy()
+        schema = copy.deepcopy(JOB_SCHEMA)
         schema["created_at"] = now
         schema["last_updated"] = now
 
@@ -55,6 +58,7 @@ class CacheMetaStore:
         pipe.hset(key, mapping=schema)
         pipe.zadd("cache:lru", {entry_id: now})
         pipe.zadd("cache:bytes", {entry_id: 0})
+        pipe.zadd("cache:expired", {entry_id: now + (3600 * 24)})
         pipe.execute()
 
     def ensure_exists(self, entry_id):
@@ -108,67 +112,86 @@ class CacheMetaStore:
         pipe.execute()
 
         self.touch(entry_id)
-        self.run_gc()
    
     # ----------------------------
     # Eviction
     # ----------------------------
 
-    def run_gc(self):
+    def finalize_job_if_complete(self, entry_id: str) -> bool:
+        job = self.get_entry(entry_id)
+
+        inference_complete = all(
+            job.get(f"{field}") == "1"
+            for field in [
+                JobFields.OUT_ORIGINAL,
+                JobFields.OUT_SIMULATED,
+                JobFields.OUT_DEFOLIATION,
+            ]
+        )
+
+        uploads_complete = all(
+            job.get(f"{field}") == "1"
+            for field in [
+                JobFields.UP_VIDEO,
+                JobFields.UP_ORIGINAL,
+                JobFields.UP_SIMULATED,
+                JobFields.UP_DEFOLIATION,
+            ]
+        )
+
+        if not (inference_complete and uploads_complete):
+            return False
+
+        self.purge_job_artifacts(entry_id)
+
+        return True
+
+    def evict_expired_jobs_for_space(self):
         max_bytes = int(self.r.get("cache:max_bytes"))
         total = self.get_total_bytes()
 
-        while total > max_bytes:
-            evicted = self._evict_one_safe_entry()
-            if not evicted:
-                raise RuntimeError(
-                    "Cache full but no safe entries to evict (all jobs active or pending delivery)"
-                )
-            total = self.get_total_bytes()
+        if total <= max_bytes:
+            return
 
-    def _evict_one_safe_entry(self) -> bool:
-        # Get LRU candidates
-        candidates = self.r.zrange("cache:lru", 0, 10)
+        now = time.time()
+        expired = self.r.zrangebyscore("cache:expired", 0, now)
 
-        for entry_id in candidates:
-            job = self.r.hgetall(f"job:{entry_id}")
+        for entry_id in expired:
+            size_bytes = self.purge_job_artifacts(entry_id)
+            self.purge_job_metadata(entry_id)
+            total -= size_bytes
+            if total <= max_bytes:
+                return
 
-            # 1️⃣ unsafe if inference running or uploads pending
-            inference_running = job.get("state") == "INFERENCING"
-            uploads_pending = any(
-                job.get(f"{field}") == "0"
-                for field in [
-                    "video_upload_done",
-                    "original_area_upload_done",
-                    "simulated_area_upload_done",
-                    "defoliation_upload_done",
-                ]
-            )
-            if inference_running or uploads_pending:
-                continue  # cannot delete yet
+        raise RuntimeError("Space Full - Try again later")
 
-            # 2️⃣ safe to delete intermediate files (keep final results)
-            if job.get("results_fetched") == "0":
-                self._delete_intermediate_files(entry_id)
-                return True
+    def mark_results_fetched(self, entry_id: str):
+        expire_at = time.time() + 3600  # 1 hour
+        
+        pipe = self.r.pipeline()
+        pipe.hset(f"job:{entry_id}", JobFields.RESULT_FETCHED, "1")
+        pipe.zadd("cache:expired", {entry_id: expire_at})
+        pipe.execute()
 
-            # 3️⃣ safe to delete full entry (results fetched)
-            size_bytes = int(job.get("bytes", 0))
-            self._delete_full_entry(entry_id, size_bytes)
-            return True
+    def purge_job_artifacts(self, entry_id: str):
+        size_bytes = int(self.get_field(entry_id, JobFields.BYTES) or 0)
+        if size_bytes == 0:
+            return size_bytes
 
-        return False
-
-    def _delete_intermediate_files(self, entry_id: str):
         self.backend.delete(entry_id=entry_id)
 
-    def _delete_full_entry(self, entry_id: str, size_bytes: int):
-        self.filesystem_backend.delete_all(entry_id)
+        pipe = self.r.pipeline()
+        pipe.hset(f"job:{entry_id}", JobFields.BYTES, 0)
+        pipe.decrby("cache:total_bytes", size_bytes)
+        pipe.execute()
+        
+        return size_bytes
+
+    def purge_job_metadata(self, entry_id: str):
         pipe = self.r.pipeline()
         pipe.delete(f"job:{entry_id}")
         pipe.zrem("cache:lru", entry_id)
-        pipe.zrem("cache:bytes", entry_id)
-        pipe.decrby("cache:total_bytes", size_bytes)
+        pipe.zrem("cache:expired", entry_id)
         pipe.execute()
 
 
@@ -200,6 +223,7 @@ class CacheMetaStore:
         # delete tracking sets and counters
         pipe.delete("cache:lru")
         pipe.delete("cache:bytes")
+        pipe.delete("cache:expired")
 
         # reinitialize limits
         pipe.set("cache:max_bytes", self.max_bytes)
@@ -207,3 +231,11 @@ class CacheMetaStore:
 
         pipe.execute()
 
+    def reset_job(self, entry_id):    
+        in_video = self.get_field(entry_id, JobFields.IN_VIDEO)
+        in_params = self.get_field(entry_id, JobFields.IN_PARAMS)
+        
+        self.r.delete(f"job:{entry_id}")
+        self.init_entry(entry_id)
+        self.update_field(entry_id, JobFields.IN_VIDEO, in_video)
+        self.update_field(entry_id, JobFields.IN_PARAMS, in_params)

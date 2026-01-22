@@ -32,7 +32,7 @@ def original_inference(video_name, state=None):
             cache.update(video_name, "defoliation", {"original_area": pred_original_area})
 
             meta = get_meta_store()
-            meta.update_field(video_name, ARTIFACTS["original"].output_flag)
+            meta.update_field(video_name, ARTIFACTS["original_area"].output_flag)
         
         print(f"✅ Original area: {pred_original_area:.2f}")
         inf_job, inf_queue_size = schedule_defoliation_inference(video_name, None)

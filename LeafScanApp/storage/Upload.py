@@ -27,6 +27,8 @@ def upload_with_mark(entry_id: str, artifact: str, local_path: Path, data_node_u
         meta = get_meta_store()
         artifact_obj = artifact_from_filename(artifact)
         meta.update_field(entry_id, artifact_obj.upload_flag)
+        meta.finalize_job_if_complete(entry_id)
+
         return True
     return False
 
@@ -46,6 +48,7 @@ def upload_with_retry(artifact: str, local_path: Path, data_node_url: str, max_a
 
             if vr.json().get("exists") is True:
                 print(f"✅ Upload verified: {artifact}")
+                
                 return True
 
         except Exception as e:
