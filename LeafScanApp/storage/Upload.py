@@ -2,13 +2,17 @@ import requests
 import hashlib
 import time
 from pathlib import Path
+
 from core.scheduler import upload_scheduler
 from config.storage import DATA_STORE_URL
+from .CacheMetaStore import get_meta_store
+from .Artifacts import artifact_from_filename
 
-def schedule_upload(artifact: str, local_path: Path):
+
+def schedule_upload(entry_id: str, artifact: str, local_path: Path):
     job = upload_scheduler.add_job(
-        func=upload_with_retry,
-        args=[artifact, local_path, DATA_STORE_URL],
+        func=upload_with_mark,
+        args=[entry_id, artifact, local_path, DATA_STORE_URL],
         id=f"upload_{artifact}",
         replace_existing=False
     )
@@ -16,6 +20,15 @@ def schedule_upload(artifact: str, local_path: Path):
     print(f"Queued Upload Job -> {job.id}")
     return job, queue_size
 
+def upload_with_mark(entry_id: str, artifact: str, local_path: Path, data_node_url: str, max_attempts: int=10):
+    upload_successful = upload_with_retry(artifact, local_path, data_node_url, max_attempts)
+    
+    if upload_successful:
+        meta = get_meta_store()
+        artifact_obj = artifact_from_filename(artifact)
+        meta.update_flag(entry_id, artifact_obj.upload_flag)
+        return True
+    return False
 
 def upload_with_retry(artifact: str, local_path: Path, data_node_url: str, max_attempts: int=10):
     upload_url = f"{data_node_url}/upload/{artifact}"

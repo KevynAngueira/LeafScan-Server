@@ -1,9 +1,12 @@
 import os
 import shutil
 import tempfile
+
 from core.cache import get_cache
 from core.paths import VIDEO_DIR, OUT_DIR, SLICES_DIR
 from models.leafscan_model import run_leafscan
+from storage import get_meta_store, ARTIFACTS
+
 from .defoliation_schedule_inference import schedule_defoliation_inference
 
 def simulated_inference(video_name, state=None):
@@ -38,9 +41,12 @@ def simulated_inference(video_name, state=None):
 
             state["results"]["simulated_area"] = pred_simulated_area
             state["status"] = "completed"
+            
             cache.save(video_name, "simulated_area", state)
-
             cache.update(video_name, "defoliation", {"simulated_area": pred_simulated_area})
+            
+            meta = get_meta_store()
+            meta.update_flag(video_name, ARTIFACTS["simulated"].output_flag)
         
         print(f"✅ Simulated area: {pred_simulated_area:.2f}")
         job, queue_size = schedule_defoliation_inference(video_name, None)

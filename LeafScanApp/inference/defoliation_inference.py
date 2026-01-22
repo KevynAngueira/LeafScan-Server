@@ -1,9 +1,11 @@
 from core.cache import get_cache
+from storage import get_meta_store, ARTIFACTS, JobFields
 
 def defoliation_inference(video_name, state=None):
     """Calculates defoliation % based on original and simulated areas."""
     
     cache = get_cache()
+    meta = get_meta_store()
     if not state:
         state = cache.load(video_name, 'defoliation')
     
@@ -22,7 +24,12 @@ def defoliation_inference(video_name, state=None):
 
             state["results"]["defoliation"] = pred_defoliation
             state["status"] = "completed"
+            
             cache.save(video_name, "defoliation", state)
+
+            meta = get_meta_store()
+            meta.update_flag(video_name, ARTIFACTS["defoliation"].output_flag)
+            meta.update_flag(video_name, JobFields.RESULT_DEFOLIATION, pred_defoliation)
 
         print(f"✅ Defoliation: {pred_defoliation:.2f}%")
         return pred_defoliation

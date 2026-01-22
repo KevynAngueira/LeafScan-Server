@@ -1,11 +1,14 @@
 from core.cache import get_cache
 from models.original_area_model import run_model
+from storage import get_meta_store, ARTIFACTS
+
 from .defoliation_schedule_inference import schedule_defoliation_inference
 
 def original_inference(video_name, state=None):
     """Runs ML model to infer original area and update cache."""
     
     cache = get_cache()
+    meta = get_meta_store()
     if not state:
         state = cache.load(video_name, 'original_area')
     
@@ -24,9 +27,12 @@ def original_inference(video_name, state=None):
 
             state["results"]["original_area"] = pred_original_area
             state["status"] = "completed"
-            cache.save(video_name, "original_area", state)
 
+            cache.save(video_name, "original_area", state)
             cache.update(video_name, "defoliation", {"original_area": pred_original_area})
+
+            meta = get_meta_store()
+            meta.update_flag(video_name, ARTIFACTS["original"].output_flag)
         
         print(f"✅ Original area: {pred_original_area:.2f}")
         inf_job, inf_queue_size = schedule_defoliation_inference(video_name, None)

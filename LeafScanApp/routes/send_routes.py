@@ -4,6 +4,7 @@ from core.paths import IMAGE_DIR, VIDEO_DIR, PARAMS_DIR
 
 from inference.original_schedule_inference import schedule_original_inference
 from inference.simulated_schedule_inference import schedule_simulated_inference
+from storage import get_meta_store, ARTIFACTS
 
 send_bp = Blueprint("send", __name__)
 
@@ -27,6 +28,9 @@ def send_video():
     current_app.cache.save_video_stream(base, video)    
     current_app.cache.update(base, "simulated_area", {"video": video.filename})
 
+    meta = get_meta_store()
+    meta.update_flag(base, ARTIFACTS["video"].input_flag)
+
     job, queue_size = schedule_simulated_inference(base, None)
 
     return jsonify({"status": "success", "filename": video.filename})
@@ -44,9 +48,10 @@ def send_params():
     current_app.cache.update(base, "simulated_area", params)
     current_app.cache.update(base, "original_area", params)
 
+    meta = get_meta_store()
+    meta.update_flag(base, ARTIFACTS["params"].input_flag)
+
     job, queue_size = schedule_original_inference(base, None)
-    print(job.id)
     job, queue_size = schedule_simulated_inference(base, None)
-    print(job.id)
 
     return jsonify({"status": "success", "filename": filename})

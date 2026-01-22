@@ -3,15 +3,16 @@
 import time
 import redis
 import os
+
 from .Cache import ComputeCache
 from .FSCache import FileSystemComputeCache
+from .JobSchema import JOB_SCHEMA
 from config.storage import CACHE_LOCATION, CACHE_MAX_BYTES
-from config.job_schema import JOB_SCHEMA
 
 _redis = None
 _cache_meta_store = None
 
-def get_cache_meta_store():
+def get_meta_store():
     global _cache_meta_store
     if _cache_meta_store is None:
         backend = FileSystemComputeCache(CACHE_LOCATION)
@@ -37,7 +38,7 @@ class CacheMetaStore:
         self.r.setnx("cache:total_bytes", 0)
 
     # ----------------------------
-    # Job lifecycle
+    # Job creation
     # ----------------------------
 
     def init_entry(self, entry_id: str):
@@ -46,8 +47,12 @@ class CacheMetaStore:
             return
 
         now = time.time()
+        schema = JOB_SCHEMA.copy()
+        schema["created_at"] = now
+        schema["last_updated"] = now
+
         pipe = self.r.pipeline()
-        pipe.hset(key, mapping= JOB_SCHEMA)
+        pipe.hset(key, mapping=schema)
         pipe.zadd("cache:lru", {entry_id: now})
         pipe.zadd("cache:bytes", {entry_id: 0})
         pipe.execute()
@@ -64,9 +69,9 @@ class CacheMetaStore:
     def touch(self, entry_id: str):
         """Update last_updated timestamp and LRU score."""
         self.ensure_exists(entry_id)
-        key = f"job:{entry_id}"
         
         now = time.time()
+        key = f"job:{entry_id}"
         pipe = self.r.pipeline()
         pipe.hset(key, mapping={
             "last_updated": now
@@ -74,7 +79,15 @@ class CacheMetaStore:
         pipe.zadd("cache:lru", {entry_id: now})
         pipe.execute()
 
-    def update_entry(self, entry_id: str):
+    def update_flag(self, entry_id: str, flag: str, val=1):
+        if flag not in JOB_SCHEMA:
+            raise ValueError(f"Unknown job flag: {flag}")
+
+        self.ensure_exists(entry_id)
+        self.r.hset(f"job:{entry_id}", flag, val)
+        self.touch(entry_id)
+
+    def update_bytes(self, entry_id: str):
         """Recompute job size from backend, update total bytes, and touch entry."""
         self.ensure_exists(entry_id)
         key = f"job:{entry_id}"
@@ -91,60 +104,7 @@ class CacheMetaStore:
 
         self.touch(entry_id)
         self.run_gc()
-
-    def get_total_bytes(self) -> int:
-        return int(self.r.get("cache:total_bytes") or 0)
-
-    # ----------------------------
-    # Input flags
-    # ----------------------------
-
-    def update_flag(self, entry_id, flag, value=1):
-        self.ensure_exists(entry_id)
-        self.r.hset(f"job:{entry_id}", flag, value)
-        self.touch(entry_id)
-
-    def mark_video_received(self, entry_id):
-        self.ensure_exists(entry_id)
-        self.r.hset(f"job:{entry_id}", "in_video", 1)
-        self.touch(entry_id)
-
-    def mark_original_params_received(self, entry_id):
-        self.ensure_exists(entry_id)
-        self.r.hset(f"job:{entry_id}", "in_original", 1)
-        self.touch(entry_id)
-
-    def mark_simulated_params_received(self, entry_id):
-        self.ensure_exists(entry_id)
-        self.r.hset(f"job:{entry_id}", "in_simulated", 1)
-        self.touch(entry_id)
-
-    # ----------------------------
-    # Inference flags
-    # ----------------------------
-
-    def set_stage(self, entry_id, stage):
-        self.ensure_exists(entry_id)
-        self.r.hset(f"job:{entry_id}", "stage", stage)
-        self.touch(entry_id)
-
-    def set_defoliation_result(self, entry_id, value):
-        self.ensure_exists(entry_id)
-        self.r.hset(f"job:{entry_id}", mapping={
-            "defoliation_result": value,
-            "stage": "COMPLETE"
-        })
-        self.touch(entry_id)
-
-    # ----------------------------
-    # Upload flags
-    # ----------------------------
-
-    def mark_uploaded(self, id, artifact):
-        self.r.hset(f"job:{id}", f"up_{artifact}", 1)
-        self.touch(id)
-
-
+   
     # ----------------------------
     # Eviction
     # ----------------------------
@@ -213,3 +173,32 @@ class CacheMetaStore:
 
     def get_entry(self, entry_id: str) -> dict:
         return self.r.hgetall(f"job:{entry_id}")
+    
+    def get_total_bytes(self) -> int:
+        return int(self.r.get("cache:total_bytes") or 0)
+
+    # ----------------------------
+    # Cleanup
+    # ----------------------------
+
+    def reset(self):
+        """
+        Clears all LeafScan cache metadata from Redis.
+        Safe to call in development.
+        """
+        pipe = self.r.pipeline()
+
+        # delete all job hashes
+        for key in self.r.scan_iter("job:*"):
+            pipe.delete(key)
+
+        # delete tracking sets and counters
+        pipe.delete("cache:lru")
+        pipe.delete("cache:bytes")
+
+        # reinitialize limits
+        pipe.set("cache:max_bytes", self.max_bytes)
+        pipe.set("cache:total_bytes", 0)
+
+        pipe.execute()
+
