@@ -46,11 +46,12 @@ def send_params():
         return jsonify({"status": "error", "message": "Missing filename or params"}), 400
 
     base = os.path.splitext(filename)[0]
-    current_app.cache.update(base, "simulated_area", params)
-    current_app.cache.update(base, "original_area", params)
-
+    
     cache = get_cache()
     cache.reset_entry(base)
+
+    current_app.cache.update(base, "simulated_area", params)
+    current_app.cache.update(base, "original_area", params)
 
     meta = get_meta_store()
     meta.update_field(base, ARTIFACTS["params"].input_flag)

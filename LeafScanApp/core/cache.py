@@ -53,7 +53,7 @@ class CacheService:
     def reset_entry(self, entry_id: str):
         for c in ["defoliation", "original_area", "simulated_area"]:
             state = self.load(entry_id, c)
-            state["status"] = "ready"
+            state["status"] = "waiting"
             state["results"] = {}
             self.save(entry_id, c, state)
 

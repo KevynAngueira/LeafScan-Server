@@ -154,13 +154,15 @@ class CacheMetaStore:
             return
 
         now = time.time()
+
         expired = self.r.zrangebyscore("cache:expired", 0, now)
 
         for entry_id in expired:
             size_bytes = self.purge_job_artifacts(entry_id)
             self.purge_job_metadata(entry_id)
             total -= size_bytes
-            if total <= max_bytes:
+        
+        if total <= max_bytes:
                 return
 
         raise RuntimeError("Space Full - Try again later")
@@ -234,7 +236,6 @@ class CacheMetaStore:
     def reset_job(self, entry_id):    
         in_video = self.get_field(entry_id, JobFields.IN_VIDEO)
         in_params = self.get_field(entry_id, JobFields.IN_PARAMS)
-        
         self.r.delete(f"job:{entry_id}")
         self.init_entry(entry_id)
         self.update_field(entry_id, JobFields.IN_VIDEO, in_video)
