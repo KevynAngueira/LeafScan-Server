@@ -3,22 +3,29 @@ import json
 import requests
 from datetime import datetime
 from typing import Dict
-from storage import ComputeCache, FileSystemComputeCache, get_meta_store, schedule_upload
+from storage import ComputeCache, FileSystemComputeCache, get_meta_store, schedule_upload, ARTIFACTS, JobFields, JobTypes
+from core.dependencies import get_dependents
 from config.storage import CACHE_LOCATION
 
 CACHE_SCHEMA = {
-    "original_area": {
-        "params": ["leafNumber", "leafWidths"],
-        "results": ["original_area"]
+    JobTypes.ORIGINAL_AREA: {
+        "params": [JobFields.IN_LEAF, JobFields.IN_WIDTHS],
+        "results": [JobFields.OUT_ORIGINAL]
     },
-    "simulated_area": {
-        "params": ["video", "length"],
-        "results": ["simulated_area"]
+    JobTypes.SIMULATED_AREA: {
+        "params": [JobFields.IN_VIDEO, JobFields.IN_LENGTH],
+        "results": [JobFields.OUT_SIMULATED]
     },
-    "defoliation": {
-        "params": ["original_area", "simulated_area"],
-        "results": ["defoliation"]
+    JobTypes.DEFOLIATION: {
+        "params": [JobTypes.ORIGINAL_AREA, JobTypes.SIMULATED_AREA],
+        "results": [JobFields.OUT_DEFOLIATION]
     }
+}
+
+FLAG_TO_JOB = {
+    JobFields.OUT_ORIGINAL: JobTypes.ORIGINAL_AREA,
+    JobFields.OUT_SIMULATED: JobTypes.SIMULATED_AREA,
+    JobFields.OUT_DEFOLIATION: JobTypes.DEFOLIATION,
 }
 
 _cache = None
@@ -59,6 +66,9 @@ class CacheService:
 
         self.meta.reset_job(entry_id)
 
+    def reset_dependent(self, entry_id: str, parent_field: str, child_field: str):
+        self.meta.update_field(entry_id, child_field, 0)
+
     def load(self, entry_id: str, step: str) -> Dict:
         artifact = self._artifact_name(entry_id, step)
 
@@ -68,59 +78,72 @@ class CacheService:
         raw = self.backend.get(artifact, entry_id=entry_id)
         return json.loads(raw.decode("utf-8"))
 
-    def save(self, entry_id: str, step: str, cache: Dict):
-        cache["last_updated"] = datetime.utcnow().isoformat() + "Z"
+    def save(self, entry_id: str, step: str, state: Dict):
+        state["last_updated"] = datetime.utcnow().isoformat() + "Z"
         artifact = self._artifact_name(entry_id, step)
-        self.backend.put(artifact, json.dumps(cache, indent=2).encode("utf-8"), entry_id=entry_id)
+        self.backend.put(artifact, json.dumps(state, indent=2).encode("utf-8"), entry_id=entry_id)
         self.meta.update_bytes(entry_id)
     
-        if cache.get("status") == "completed":
+        if self.meta.get_field(entry_id, ARTIFACTS[step].output_flag) and (state.get("status") == "completed"):
             local_path = self.backend._artifact_path(entry_id, artifact)
-            schedule_upload(entry_id, artifact, local_path)
+            schedule_upload(entry_id, step, local_path)
 
         self.meta.evict_expired_jobs_for_space()
 
-    def sanitize(self, step: str, cache: Dict) -> Dict:
+    def sanitize(self, step: str, state: Dict) -> Dict:
         schema = CACHE_SCHEMA.get(step)
         if not schema:
-            raise ValueError(f"Unknown cache type: {step}")
+            raise ValueError(f"Unknown state type: {step}")
 
-        cache["params"] = {
-            k: cache.get("params", {}).get(k)
+        state["params"] = {
+            k: state.get("params", {}).get(k)
             for k in schema["params"]
         }
-        cache["results"] = {
-            k: cache.get("results", {}).get(k)
+        state["results"] = {
+            k: state.get("results", {}).get(k)
             for k in schema["results"]
         }
-        return cache
+        return state
 
-    def update(self, entry_id: str, step: str, new_params: Dict = None) -> Dict:
-        cache = self.load(entry_id, step)
-        cache = self.sanitize(step, cache)
+    def update(self, entry_id: str, step: str, new_params: Dict = None, new_data=False) -> Dict:
+        state = self.load(entry_id, step)
+        state = self.sanitize(step, state)
 
         schema_params = CACHE_SCHEMA[step]["params"]
-        current_params = cache.get("params", {})
+        current_params = state.get("params", {})
 
         new_params = new_params or {}
-        updated = {
+
+        changed_params = {
             k: new_params[k]
             for k in schema_params
             if k in new_params and current_params.get(k) != new_params[k]
         }
 
-        if updated:
-            cache["params"].update(updated)
-            cache["results"] = {}
+        if not changed_params:
+            return
 
-            if all(cache["params"].get(k) is not None for k in schema_params):
-                cache["status"] = "ready"
-            else:
-                cache["status"] = "waiting"
+        state["params"].update(changed_params)
+        state["results"] = {}
+        state["status"] = (
+            "ready"
+            if all(state["params"].get(k) is not None for k in schema_params)
+            else "waiting"
+        )       
 
-            self.save(entry_id, step, cache)
+        self.save(entry_id, step, state)
 
-        return cache
+        for param in changed_params.keys():
+            param_field = param
+            self.meta.update_field(entry_id, param_field, 1)
+            
+            if new_data:
+                dependents = get_dependents(entry_id, param_field)
+                print(f"{param} -> Dependencies {dependents}")
+
+                for dep in dependents:
+                    self.reset_dependent(entry_id, param, dep)
+        return state
 
     def video_exists(self, entry_id: str) -> bool:
         artifact = self._artifact_name(entry_id, "video")
@@ -136,6 +159,6 @@ class CacheService:
         self.meta.update_bytes(entry_id)
 
         local_path = self.backend._artifact_path(entry_id, artifact)
-        schedule_upload(entry_id, artifact, local_path)
+        schedule_upload(entry_id, "video", local_path)
 
         self.meta.evict_expired_jobs_for_space()

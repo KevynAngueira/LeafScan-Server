@@ -1,6 +1,7 @@
 from flask import Blueprint, jsonify, current_app
 from core.cache import CACHE_SCHEMA
 from core.inputs import routes_to_rerun
+from inference.all_schedulers import SCHEDULERS
 from core.dependencies import check_dependencies
 from inference.defoliation_schedule_inference import schedule_defoliation_inference
 from inference.original_schedule_inference import schedule_original_inference
@@ -37,7 +38,9 @@ def inference_entry(video_name):
 
     # 2️⃣ Otherwise, check for missing dependencies
     missing_params = []
-    all_satisfied = check_dependencies(video_name, JobFields.OUT_DEFOLIATION, missing_params)
+    all_satisfied, jobs_to_reschedule = check_dependencies(video_name, JobFields.OUT_DEFOLIATION, missing_params)
+    for r in jobs_to_reschedule:
+        job, queue_size = SCHEDULERS[r](video_name, None)
 
     if all_satisfied:
         job, queue_size = schedule_defoliation_inference(video_name)

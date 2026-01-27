@@ -4,7 +4,9 @@ ROUTES = ['video', 'params']
 
 PARAMS_TO_ROUTES = {
     JobFields.IN_VIDEO: "video",
-    JobFields.IN_PARAMS: "params"
+    JobFields.IN_LENGTH: "params",
+    JobFields.IN_LEAF: "params",
+    JobFields.IN_WIDTHS: "params",
 }
 
 def routes_to_rerun(missing_params):

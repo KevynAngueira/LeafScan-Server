@@ -2,7 +2,7 @@ from dataclasses import dataclass
 from typing import Optional
 from fnmatch import fnmatch
 
-from .JobSchema import JobFields
+from .JobSchema import JobFields, JobTypes
 
 
 @dataclass(frozen=True)
@@ -22,30 +22,25 @@ def artifact_from_filename(filename: str) -> Artifact | None:
 # ---- Canonical registry ----
 
 ARTIFACTS = {
-    "video": Artifact(
+    JobTypes.VIDEO: Artifact(
         pattern="*_video.mp4",
         input_flag=JobFields.IN_VIDEO,
         upload_flag=JobFields.UP_VIDEO,
     ),
-    
-    "params": Artifact(
-        pattern="params",
-        input_flag=JobFields.IN_PARAMS,
-    ),
 
-    "original_area": Artifact(
+    JobTypes.ORIGINAL_AREA: Artifact(
         pattern="*_original_area.json",
         output_flag=JobFields.OUT_ORIGINAL,
         upload_flag=JobFields.UP_ORIGINAL,
     ),
 
-    "simulated_area": Artifact(
+    JobTypes.SIMULATED_AREA: Artifact(
         pattern="*_simulated_area.json",
         output_flag=JobFields.OUT_SIMULATED,
         upload_flag=JobFields.UP_SIMULATED,
     ),
 
-    "defoliation": Artifact(
+    JobTypes.DEFOLIATION: Artifact(
         pattern="*_defoliation.json",
         output_flag=JobFields.OUT_DEFOLIATION,
         upload_flag=JobFields.UP_DEFOLIATION

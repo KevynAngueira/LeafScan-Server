@@ -1,8 +1,17 @@
 # ---- Field Names ----
 
+class JobTypes:
+    VIDEO = "video"
+    PARAMS = "params"
+    ORIGINAL_AREA = "original_area"
+    SIMULATED_AREA = "simulated_area"
+    DEFOLIATION = "defoliation"
+
 class JobFields:
-    IN_VIDEO = "in_video"
-    IN_PARAMS = "in_params"
+    IN_VIDEO = "video"
+    IN_LENGTH = "length"
+    IN_LEAF = "leafNumber"
+    IN_WIDTHS = "leafWidths"
 
     OUT_ORIGINAL = "out_original"
     OUT_SIMULATED = "out_simulated"
@@ -25,7 +34,9 @@ class JobFields:
 JOB_SCHEMA = {
     # inputs
     JobFields.IN_VIDEO: 0,
-    JobFields.IN_PARAMS: 0,
+    JobFields.IN_LENGTH: 0,
+    JobFields.IN_LEAF: 0,
+    JobFields.IN_WIDTHS: 0,
 
     # outputs
     JobFields.OUT_ORIGINAL: 0,

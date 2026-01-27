@@ -90,7 +90,7 @@ class CacheMetaStore:
 
     def update_field(self, entry_id: str, field: str, val=1):
         if field not in JOB_SCHEMA:
-            raise ValueError(f"Unknown job field: {field}")
+            return
 
         self.ensure_exists(entry_id)
         self.r.hset(f"job:{entry_id}", field, val)

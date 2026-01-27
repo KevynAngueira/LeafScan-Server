@@ -1,11 +1,10 @@
-import os, json
+import os, json, time
 from flask import Blueprint, request, jsonify, current_app
 from core.paths import IMAGE_DIR, VIDEO_DIR, PARAMS_DIR
-from core.cache import get_cache
 
 from inference.original_schedule_inference import schedule_original_inference
 from inference.simulated_schedule_inference import schedule_simulated_inference
-from storage import get_meta_store, ARTIFACTS
+from storage import ARTIFACTS, JobFields, JobTypes
 
 send_bp = Blueprint("send", __name__)
 
@@ -20,17 +19,16 @@ def send_image():
 
 @send_bp.route("/send/video", methods=["POST"])
 def send_video():
-    if "video" not in request.files:
+    if JobTypes.VIDEO not in request.files:
         return jsonify({"status": "error", "message": "No video file"}), 400
     
     video = request.files["video"]
     base = os.path.splitext(video.filename)[0]
 
     current_app.cache.save_video_stream(base, video)    
-    current_app.cache.update(base, "simulated_area", {"video": video.filename})
+    current_app.cache.update(base, JobTypes.SIMULATED_AREA, {JobFields.IN_VIDEO: video.filename}, new_data=True)
 
-    meta = get_meta_store()
-    meta.update_field(base, ARTIFACTS["video"].input_flag)
+    time.sleep(3)
 
     job, queue_size = schedule_simulated_inference(base, None)
 
@@ -47,14 +45,10 @@ def send_params():
 
     base = os.path.splitext(filename)[0]
     
-    cache = get_cache()
-    cache.reset_entry(base)
+    current_app.cache.update(base, JobTypes.SIMULATED_AREA, params, new_data=True)
+    current_app.cache.update(base, JobTypes.ORIGINAL_AREA, params, new_data=True)
 
-    current_app.cache.update(base, "simulated_area", params)
-    current_app.cache.update(base, "original_area", params)
-
-    meta = get_meta_store()
-    meta.update_field(base, ARTIFACTS["params"].input_flag)
+    time.sleep(3)
 
     job, queue_size = schedule_original_inference(base, None)
     job, queue_size = schedule_simulated_inference(base, None)
