@@ -30,6 +30,46 @@ DOWNSTREAM_DEPENDENCY_SCHEMA = {
     JobTypes.DEFOLIATION: [JobFields.UP_DEFOLIATION],
 }
 
+
+def dependencies_ready(entry_id: str, stage: str):
+    """
+    Returns:
+      ready: bool
+      missing: list of missing upstream fields
+      rerunnable: list of upstream jobs that can be rescheduled
+    """
+    meta = get_meta_store()
+
+    ready = True
+    missing = []
+    rerunnable = []
+
+    required = UPSTREAM_DEPENDENCY_SCHEMA.get(stage, [])
+
+    for dep in required:
+        flag = bool(int(meta.get_field(entry_id, dep)))
+
+        if flag:
+            continue
+
+        # Missing upstream
+        if dep in UPSTREAM_DEPENDENCY_SCHEMA:
+            # It's a computable stage — recurse
+            sub_ready, sub_missing, sub_rerunnable = dependencies_ready(entry_id, dep)
+            missing.extend(sub_missing)
+            rerunnable.extend(sub_rerunnable)
+
+            if sub_ready:
+                rerunnable.append(dep)
+            else:
+                ready = False
+        else:
+            # Leaf param missing
+            missing.append(dep)
+            ready = False
+
+    return ready, missing, rerunnable
+
 def check_dependencies(entry_id: str, stage: str, missing_params):
     """
     Recursively check upstream inputs.

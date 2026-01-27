@@ -66,9 +66,6 @@ class CacheService:
 
         self.meta.reset_job(entry_id)
 
-    def reset_dependent(self, entry_id: str, parent_field: str, child_field: str):
-        self.meta.update_field(entry_id, child_field, 0)
-
     def load(self, entry_id: str, step: str) -> Dict:
         artifact = self._artifact_name(entry_id, step)
 
@@ -84,11 +81,12 @@ class CacheService:
         self.backend.put(artifact, json.dumps(state, indent=2).encode("utf-8"), entry_id=entry_id)
         self.meta.update_bytes(entry_id)
     
-        if self.meta.get_field(entry_id, ARTIFACTS[step].output_flag) and (state.get("status") == "completed"):
+        if state.get("status") == "completed":
+            self.meta.update_field(entry_id, ARTIFACTS[step].upload_flag)
             local_path = self.backend._artifact_path(entry_id, artifact)
             schedule_upload(entry_id, step, local_path)
 
-        self.meta.evict_expired_jobs_for_space()
+        self.meta.evict_jobs_for_space()
 
     def sanitize(self, step: str, state: Dict) -> Dict:
         schema = CACHE_SCHEMA.get(step)
@@ -106,22 +104,31 @@ class CacheService:
         return state
 
     def update(self, entry_id: str, step: str, new_params: Dict = None, new_data=False) -> Dict:
+        
+        # Load and Sanitize
         state = self.load(entry_id, step)
         state = self.sanitize(step, state)
 
         schema_params = CACHE_SCHEMA[step]["params"]
         current_params = state.get("params", {})
-
         new_params = new_params or {}
 
+        # Capture which params have changed
         changed_params = {
             k: new_params[k]
             for k in schema_params
             if k in new_params and current_params.get(k) != new_params[k]
         }
 
+        print(f"Input Params:{new_params} =====")
+        print(f"Changed Params:{changed_params} =====")
+
+        # Exit early if no changes
         if not changed_params:
             return
+
+        # Update current entry
+        self.meta.update_field(entry_id, ARTIFACTS[step].output_flag, 0)
 
         state["params"].update(changed_params)
         state["results"] = {}
@@ -129,20 +136,23 @@ class CacheService:
             "ready"
             if all(state["params"].get(k) is not None for k in schema_params)
             else "waiting"
-        )       
+        )    
 
         self.save(entry_id, step, state)
 
+        # Update all dependents
         for param in changed_params.keys():
             param_field = param
             self.meta.update_field(entry_id, param_field, 1)
             
-            if new_data:
-                dependents = get_dependents(entry_id, param_field)
-                print(f"{param} -> Dependencies {dependents}")
+            for dep in get_dependents(entry_id, param_field):
+                self.meta.update_field(entry_id, dep, 0)   
 
-                for dep in dependents:
-                    self.reset_dependent(entry_id, param, dep)
+        print(f">>>> Update {entry_id} >>>>")
+        print(self.meta.get_entry(entry_id))
+        print(f"<<<< Update {entry_id} <<<<")
+        print()
+
         return state
 
     def video_exists(self, entry_id: str) -> bool:
@@ -159,6 +169,7 @@ class CacheService:
         self.meta.update_bytes(entry_id)
 
         local_path = self.backend._artifact_path(entry_id, artifact)
+        self.meta.update_field(entry_id, ARTIFACTS["video"].upload_flag)
         schedule_upload(entry_id, "video", local_path)
 
-        self.meta.evict_expired_jobs_for_space()
+        self.meta.evict_jobs_for_space()

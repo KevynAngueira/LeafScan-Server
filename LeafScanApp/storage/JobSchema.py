@@ -28,6 +28,7 @@ class JobFields:
     BYTES = "bytes"
     CREATED_AT = "created_at"
     LAST_UPDATED = "last_updated"
+    ARTIFACTS_PURGED = "artifacts_purged"
 
 # ---- Job Schema ----
 
@@ -55,5 +56,6 @@ JOB_SCHEMA = {
 
     # bookkeeping
     JobFields.BYTES: 0,
+    JobFields.ARTIFACTS_PURGED: 0,
     # timestamps filled at runtime
 }

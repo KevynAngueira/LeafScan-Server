@@ -22,11 +22,16 @@ def schedule_upload(entry_id: str, step: str, local_path: Path):
 
 def upload_with_mark(entry_id: str, step: str, local_path: Path, data_node_url: str, max_attempts: int=10):
     upload_successful = upload_with_retry(entry_id, step, local_path, data_node_url, max_attempts)
-    
+
     if upload_successful:
         meta = get_meta_store()
         meta.update_field(entry_id, ARTIFACTS[step].upload_flag)
         meta.finalize_job_if_complete(entry_id)
+
+        print(f">>> Upload {entry_id}_{step} >>>>")
+        print(meta.get_entry(entry_id))
+        print(f"<<<< Upload {entry_id}_{step} <<<<")
+        print()
 
         return True
     return False

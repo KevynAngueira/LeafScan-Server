@@ -28,8 +28,6 @@ def send_video():
     current_app.cache.save_video_stream(base, video)    
     current_app.cache.update(base, JobTypes.SIMULATED_AREA, {JobFields.IN_VIDEO: video.filename}, new_data=True)
 
-    time.sleep(3)
-
     job, queue_size = schedule_simulated_inference(base, None)
 
     return jsonify({"status": "success", "filename": video.filename})
@@ -44,11 +42,11 @@ def send_params():
         return jsonify({"status": "error", "message": "Missing filename or params"}), 400
 
     base = os.path.splitext(filename)[0]
-    
-    current_app.cache.update(base, JobTypes.SIMULATED_AREA, params, new_data=True)
-    current_app.cache.update(base, JobTypes.ORIGINAL_AREA, params, new_data=True)
 
-    time.sleep(3)
+    print(f"\nParams:\n{params}\n")
+    
+    current_app.cache.update(base, JobTypes.ORIGINAL_AREA, params, new_data=True)
+    current_app.cache.update(base, JobTypes.SIMULATED_AREA, params, new_data=True)
 
     job, queue_size = schedule_original_inference(base, None)
     job, queue_size = schedule_simulated_inference(base, None)

@@ -1,11 +1,11 @@
 from core.scheduler import inference_scheduler
 from .simulated_inference import simulated_inference
 
-def schedule_simulated_inference(video_name, state=None):
+def schedule_simulated_inference(entry_id, state=None):
     job = inference_scheduler.add_job(
         func=simulated_inference,
-        args=[video_name, state],
-        id=f"simulated_{video_name}",
+        args=[entry_id, state],
+        id=f"simulated_{entry_id}",
         replace_existing=False
     )
     queue_size = len(inference_scheduler.get_jobs()) - 1

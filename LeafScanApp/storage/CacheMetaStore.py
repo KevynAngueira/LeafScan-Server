@@ -142,11 +142,14 @@ class CacheMetaStore:
         if not (inference_complete and uploads_complete):
             return False
 
-        self.purge_job_artifacts(entry_id)
+        #self.purge_job_artifacts(entry_id)
+        now = time.time()
+        self.r.zadd("cache:completed", {entry_id: now})
+        return True
 
         return True
 
-    def evict_expired_jobs_for_space(self):
+    def evict_jobs_for_space(self):
         max_bytes = int(self.r.get("cache:max_bytes"))
         total = self.get_total_bytes()
 
@@ -155,6 +158,7 @@ class CacheMetaStore:
 
         now = time.time()
 
+        # 1️⃣ Evict expired jobs (artifacts + metadata)
         expired = self.r.zrangebyscore("cache:expired", 0, now)
 
         for entry_id in expired:
@@ -165,6 +169,17 @@ class CacheMetaStore:
         if total <= max_bytes:
                 return
 
+        # 2️⃣ Evict completed jobs (artifacts only)
+        completed = self.r.zrange("cache:completed", 0, -1)
+
+        for entry_id in completed:
+            size = self.purge_job_artifacts(entry_id)
+            self.r.zrem("cache:completed", entry_id)
+            total -= size
+            if total <= max_bytes:
+                return
+
+        # 3️⃣ Hard stop
         raise RuntimeError("Space Full - Try again later")
 
     def mark_results_fetched(self, entry_id: str):
@@ -183,7 +198,11 @@ class CacheMetaStore:
         self.backend.delete(entry_id=entry_id)
 
         pipe = self.r.pipeline()
-        pipe.hset(f"job:{entry_id}", JobFields.BYTES, 0)
+        pipe.hset(f"job:{entry_id}", mapping={
+            JobFields.BYTES: 0,
+            JobFields.ARTIFACTS_PURGED: 1,
+        })
+
         pipe.decrby("cache:total_bytes", size_bytes)
         pipe.execute()
         
