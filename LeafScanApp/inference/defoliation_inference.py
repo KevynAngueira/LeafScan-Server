@@ -61,7 +61,6 @@ def defoliation_inference(entry_id, state=None):
         print(f"<<<< Defoliation {entry_id} <<<<")
         print()
 
-
         print(f"✅ Defoliation (computed): {pred_defoliation:.2f}%")
         return pred_defoliation
 
